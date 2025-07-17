@@ -1,83 +1,50 @@
 # main.py
 
-import sys
-import logging
-import pygame
-from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, MAX_FPS,
-    CIRCLE_INITIAL_POS, CIRCLE_RADIUS, MOVE_SPEED
-)
-from input_handler import handle_input
-from renderer import clear_screen, draw_objects, update_display
+import pygame, sys
+from snake import move_snake, place_food, check_collision
 
-def init_logging():
-    """デバッグ用ログ出力設定"""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='[%(asctime)s] %(name)s %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S'
-    )
+# 初期設定
+pygame.init()
+CELL = 20
+GRID_W, GRID_H = 20, 20
+SCREEN = pygame.display.set_mode((CELL*GRID_W, CELL*GRID_H))
+CLOCK = pygame.time.Clock()
 
-def init_pygame():
-    """pygame初期化と画面作成"""
-    try:
-        pygame.init()
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Day7: 関数化＋モジュール分割 テンプレート v2")
-        return screen
-    except Exception as e:
-        logging.error("pygame初期化失敗", exc_info=e)
-        sys.exit(1)
+# 初期データ
+snake = [(5,5), (4,5), (3,5)]
+direction = (1,0)
+food = place_food(snake, (GRID_W, GRID_H))
 
-def main():
-    init_logging()
-    screen = init_pygame()
-    clock = pygame.time.Clock()
+while True:
+    # 1) イベント処理
+    for e in pygame.event.get():
+        if e.type == pygame.QUIT:
+            pygame.quit(); sys.exit()
+        elif e.type == pygame.KEYDOWN:
+            if e.key == pygame.K_RIGHT: direction=(1,0)
+            elif e.key == pygame.K_LEFT:  direction=(-1,0)
+            elif e.key == pygame.K_UP:    direction=(0,-1)
+            elif e.key == pygame.K_DOWN:  direction=(0,1)
 
-    # ゲーム状態初期化
-    state = {
-        'circle_pos': list(CIRCLE_INITIAL_POS),
-        'circle_radius': CIRCLE_RADIUS
-    }
+    # 2) 移動・エサ処理
+    will_grow = ( (snake[0][0]+direction[0], snake[0][1]+direction[1]) == food )
+    snake = move_snake(snake, direction, grow=will_grow)
+    if will_grow:
+        food = place_food(snake, (GRID_W, GRID_H))
 
-    running = True
-    while running:
-        # 経過時間取得（秒）
-        dt = clock.tick(MAX_FPS) / 1000.0
+    # 3) 衝突チェック
+    if check_collision(snake, (GRID_W, GRID_H)):
+        print("ゲームオーバー!")  # デバッグ：コンソールに表示
+        break                 # ループを抜けて終了
 
-        # 1) 入力処理
-        running, input_data = handle_input()
-        if not running:
-            break
+    # 4) 描画
+    SCREEN.fill((0,0,0))
+    # ヘビ
+    for x,y in snake:
+        pygame.draw.rect(SCREEN, (0,255,0), (x*CELL,y*CELL,CELL,CELL))
+    # エサ
+    fx,fy = food
+    pygame.draw.rect(SCREEN, (255,0,0), (fx*CELL,fy*CELL,CELL,CELL))
 
-        # 2) ロジック更新（delta time対応）
-        keys = input_data.get('keys', [])
-        dx = dy = 0.0
-        if keys[pygame.K_LEFT]:
-            dx -= MOVE_SPEED * dt
-        if keys[pygame.K_RIGHT]:
-            dx += MOVE_SPEED * dt
-        if keys[pygame.K_UP]:
-            dy -= MOVE_SPEED * dt
-        if keys[pygame.K_DOWN]:
-            dy += MOVE_SPEED * dt
-
-        state['circle_pos'][0] += dx
-        state['circle_pos'][1] += dy
-
-        # 画面端で止める
-        x, y = state['circle_pos']
-        r = state['circle_radius']
-        x = max(r, min(SCREEN_WIDTH - r, x))
-        y = max(r, min(SCREEN_HEIGHT - r, y))
-        state['circle_pos'] = [x, y]
-
-        # 3) 描画処理
-        clear_screen(screen)
-        draw_objects(screen, state)
-        update_display()
-
-    pygame.quit()
-
-if __name__ == "__main__":
-    main()
+    pygame.display.flip()
+    CLOCK.tick(10)
